@@ -7,7 +7,7 @@
   const DECK_COUNT = 6;
   const RESHUFFLE_AT = 60; // reshuffle the shoe when fewer cards than this remain
   const START_BANKROLL = 1000;
-  const STORAGE_KEY = "blackjack-bankroll";
+  let storageKey = "blackjack-bankroll"; // becomes per-user once signed in
   const MIN_BET = 5;
 
   const $ = (id) => document.getElementById(id);
@@ -47,14 +47,14 @@
   // ---------- Storage ----------
   function loadBankroll() {
     try {
-      const v = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+      const v = parseInt(localStorage.getItem(storageKey), 10);
       return Number.isFinite(v) && v >= MIN_BET ? v : START_BANKROLL;
     } catch {
       return START_BANKROLL;
     }
   }
   function saveBankroll() {
-    try { localStorage.setItem(STORAGE_KEY, String(state.bankroll)); } catch { /* ignore */ }
+    try { localStorage.setItem(storageKey, String(state.bankroll)); } catch { /* ignore */ }
   }
 
   // ---------- API ----------
@@ -401,6 +401,21 @@
   renderStats();
   renderChips();
   showPhase("betting");
+
+  // Called by auth.js when a user signs in, so each account keeps its own bankroll.
+  window.blackjackSetPlayer = (userId) => {
+    storageKey = userId ? `blackjack-bankroll:${userId}` : "blackjack-bankroll";
+    state.bankroll = loadBankroll();
+    state.bet = 0;
+    state.player = [];
+    state.dealer = [];
+    state.holeHidden = true;
+    renderHands();
+    renderStats();
+    renderChips();
+    showPhase("betting");
+    setMessage("Place your bet to begin.");
+  };
 
   // Warm up a shoe in the background so the first deal is fast.
   newShoe().then(renderStats).catch(() => { /* will retry on deal */ });
