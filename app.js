@@ -403,7 +403,7 @@
   showPhase("betting");
 
   // Called by auth.js when a user signs in, so each account keeps its own bankroll.
-  window.blackjackSetPlayer = (userId) => {
+  window.blackjackSetPlayer = (userId, greeting) => {
     storageKey = userId ? `blackjack-bankroll:${userId}` : "blackjack-bankroll";
     state.bankroll = loadBankroll();
     state.bet = 0;
@@ -414,7 +414,7 @@
     renderStats();
     renderChips();
     showPhase("betting");
-    setMessage("Place your bet to begin.");
+    setMessage(greeting ? `${greeting} Place your bet to begin.` : "Place your bet to begin.");
   };
 
   // Warm up a shoe in the background so the first deal is fast.

@@ -52,10 +52,10 @@
       <span>Bet: <strong id="bet">$0</strong></span>
       <span class="shoe">Shoe: <strong id="remaining">–</strong> cards</span>
     </div>
-    <div class="user">
-      <span id="user-email"></span>
-      <button type="button" class="btn link" id="signout">Sign out</button>
-    </div>
+    <button type="button" class="user" id="open-profile" aria-label="Open your profile">
+      <span class="user-greeting" id="user-greeting"></span>
+      <span class="avatar small" id="header-avatar"></span>
+    </button>
   </header>
 
   <main class="table">
@@ -104,6 +104,35 @@
     6-deck shoe · Dealer stands on all 17s · Blackjack pays 3:2
   </footer>
   </div>
+
+  <dialog class="profile" id="profile">
+    <form method="dialog" class="profile-card" id="profile-form">
+      <button type="button" class="close" id="profile-close" aria-label="Close">×</button>
+      <h2>Your profile</h2>
+
+      <div class="avatar large" id="profile-avatar"></div>
+      <div class="photo-actions">
+        <label class="btn secondary" for="photo-input">Change photo</label>
+        <input type="file" id="photo-input" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+        <button type="button" class="btn link" id="photo-reset"></button>
+      </div>
+
+      <label for="display-name">Display name</label>
+      <input type="text" id="display-name" maxlength="40" autocomplete="nickname" />
+
+      <label for="profile-email">Email</label>
+      <input type="email" id="profile-email" readonly />
+
+      <p class="profile-meta" id="profile-meta"></p>
+      <p class="auth-error" id="profile-error" role="alert"></p>
+      <p class="auth-info" id="profile-info" role="status"></p>
+
+      <div class="profile-buttons">
+        <button type="button" class="btn secondary" id="signout">Sign out</button>
+        <button type="submit" class="btn primary" id="profile-save" value="save">Save</button>
+      </div>
+    </form>
+  </dialog>
 
   <div class="loading" id="loading">Loading…</div>
 

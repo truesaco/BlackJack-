@@ -16,6 +16,10 @@ It's plain HTML, CSS and JavaScript, so there's no build step.
 
 Players sign in before playing, using **Google** or **email and password**. Supabase Auth handles this (project "Black Jack"). Each account keeps its own bankroll in that browser.
 
+After signing in, players are greeted by name. The avatar button in the top-right opens their **profile**, where they can change their display name and photo. Google users get their Google name and photo by default and can switch back to them at any time.
+
+Photos are cropped to 256×256 in the browser and uploaded to the public `avatars` storage bucket. Each user can only write to their own folder. Name and photo choices are saved on the user's Supabase account. The bucket setup is in `supabase/migrations/`.
+
 The code is in `auth.js`. It uses the project's publishable key, which is meant to be public.
 
 ### One-time Supabase setup
