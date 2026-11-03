@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blackjack Stats</title>
+  <meta name="description" content="Your blackjack results, decisions and strategy performance." />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="stats.css" />
+</head>
+<body class="stats-page">
+  <header class="topbar">
+    <h1>My stats</h1>
+    <div class="topbar-right">
+      <a class="stats-link" href="index.html">🃏 Back to the table</a>
+    </div>
+  </header>
+
+  <main class="dash" id="dash">
+    <p class="dash-status" id="status">Loading your hands…</p>
+
+    <div class="hidden" id="content">
+      <!-- Filters scope everything below -->
+      <section class="filters" aria-label="Filters">
+        <label>Date range
+          <select id="f-range">
+            <option value="all">All time</option>
+            <option value="1">Today</option>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="90">Last 90 days</option>
+          </select>
+        </label>
+        <label>Strategy
+          <select id="f-strategy"><option value="all">All strategies</option></select>
+        </label>
+        <label>Session
+          <select id="f-session"><option value="all">All sessions</option></select>
+        </label>
+        <div class="filters-spacer"></div>
+        <button type="button" class="btn secondary small" id="export-csv">Export CSV</button>
+        <button type="button" class="btn secondary small" id="export-json">Export JSON</button>
+      </section>
+
+      <p class="dash-status hidden" id="empty">No hands match these filters yet. Go play a few!</p>
+
+      <div id="panels">
+        <section class="tiles" id="tiles" aria-label="Key metrics"></section>
+
+        <section class="panel">
+          <h2>Cumulative profit</h2>
+          <p class="panel-sub">Running net winnings, hand by hand</p>
+          <div class="chart" id="chart-profit"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Result mix</h2>
+          <p class="panel-sub" id="mix-sub"></p>
+          <div id="chart-mix"></div>
+        </section>
+
+        <div class="grid-2">
+          <section class="panel">
+            <h2>Profit per hand by dealer upcard</h2>
+            <p class="panel-sub">Average net per hand when the dealer shows this card</p>
+            <div class="chart" id="chart-upcard"></div>
+          </section>
+          <section class="panel">
+            <h2>Profit per hand by your starting hand</h2>
+            <p class="panel-sub">Average net per hand by your first two cards</p>
+            <div class="chart" id="chart-start"></div>
+          </section>
+        </div>
+
+        <section class="panel">
+          <h2>Profit per hand by true count</h2>
+          <p class="panel-sub">Hi-Lo true count before the deal. Positive counts favour the player.</p>
+          <div class="chart" id="chart-count"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Strategy comparison</h2>
+          <p class="panel-sub">Tag hands with a strategy at the table to compare them here</p>
+          <div class="table-wrap"><table class="data" id="strategy-table"></table></div>
+        </section>
+
+        <section class="panel">
+          <h2>Your decisions vs basic strategy</h2>
+          <p class="panel-sub" id="decision-sub"></p>
+          <div class="tiles compact" id="decision-tiles"></div>
+          <h3>Most common deviations</h3>
+          <div class="table-wrap"><table class="data" id="deviation-table"></table></div>
+        </section>
+
+        <section class="panel">
+          <h2>Hand history</h2>
+          <p class="panel-sub">Newest first. ⚠ marks a decision that differs from basic strategy.</p>
+          <div class="table-wrap"><table class="data" id="history-table"></table></div>
+          <div class="pager">
+            <button type="button" class="btn secondary small" id="prev-page">← Newer</button>
+            <span id="page-info"></span>
+            <button type="button" class="btn secondary small" id="next-page">Older →</button>
+          </div>
+        </section>
+
+        <p class="danger-zone">
+          <button type="button" class="btn link" id="delete-all">Delete all my hand history</button>
+        </p>
+      </div>
+    </div>
+  </main>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="strategy.js"></script>
+  <script src="stats.js"></script>
+</body>
+</html>

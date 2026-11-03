@@ -2,10 +2,6 @@
 (() => {
   "use strict";
 
-  // The publishable key is designed to be public; access is enforced by Supabase.
-  const SUPABASE_URL = "https://ahftbaykwpegkcpftiam.supabase.co";
-  const SUPABASE_KEY = "sb_publishable_xC7vKxnh2oRdsid6syIc4A_JcpT42L-";
-
   const $ = (id) => document.getElementById(id);
   const el = {
     auth: $("auth"),
@@ -46,12 +42,45 @@
   // Where Supabase sends people back after Google sign-in or an email link.
   const REDIRECT_URL = window.location.origin + window.location.pathname;
 
-  if (!window.supabase || !window.supabase.createClient) {
+  if (!window.sbClient) {
     el.loading.textContent = "Couldn't load the sign-in service. Check your connection and refresh.";
     return;
   }
 
-  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  const sb = window.sbClient;
+
+  // ---------- Hand history ----------
+  // Every finished hand is saved to the "hands" table for the stats page.
+  // If a save fails (offline, etc.) it waits in localStorage and is retried.
+  const pendingKey = () => `blackjack-pending-hands:${currentUserId}`;
+  const readPending = () => { try { return JSON.parse(localStorage.getItem(pendingKey())) || []; } catch { return []; } };
+  const writePending = (rows) => { try { localStorage.setItem(pendingKey(), JSON.stringify(rows.slice(-500))); } catch { /* ignore */ } };
+  let flushing = false;
+
+  async function flushPending() {
+    if (flushing || !currentUserId) return;
+    const rows = readPending();
+    if (!rows.length) return;
+    flushing = true;
+    try {
+      const { error } = await sb.from("hands").insert(rows);
+      if (!error) writePending([]);
+    } finally {
+      flushing = false;
+    }
+  }
+
+  window.blackjackRecordHand = async (row) => {
+    if (!currentUserId) return;
+    const record = { ...row, played_at: new Date().toISOString() };
+    const { error } = await sb.from("hands").insert(record);
+    if (error) {
+      console.warn("Couldn't save hand, will retry:", error.message);
+      writePending([...readPending(), record]);
+    } else {
+      flushPending();
+    }
+  };
 
   // mode: "signin" | "signup" | "forgot" | "recovery"
   let mode = "signin";
@@ -115,6 +144,7 @@
 
     if (currentUserId !== user.id) {
       currentUserId = user.id;
+      flushPending();
       const greeting = p.isNew ? `Welcome, ${firstName(p.name)}!` : `Welcome back, ${firstName(p.name)}!`;
       if (window.blackjackSetPlayer) window.blackjackSetPlayer(user.id, greeting);
     }

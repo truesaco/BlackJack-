@@ -52,10 +52,13 @@
       <span>Bet: <strong id="bet">$0</strong></span>
       <span class="shoe">Shoe: <strong id="remaining">–</strong> cards</span>
     </div>
+    <div class="topbar-right">
+    <a class="stats-link" href="stats.html">📊 My stats</a>
     <button type="button" class="user" id="open-profile" aria-label="Open your profile">
       <span class="user-greeting" id="user-greeting"></span>
       <span class="avatar small" id="header-avatar"></span>
     </button>
+    </div>
   </header>
 
   <main class="table">
@@ -73,6 +76,17 @@
 
     <section class="controls">
       <div class="betting" id="betting">
+        <label class="strategy-picker">
+          Strategy
+          <select id="strategy">
+            <option>Basic strategy</option>
+            <option>Hi-Lo counting</option>
+            <option>Never bust</option>
+            <option>Mimic the dealer</option>
+            <option>Gut feel</option>
+            <option value="__new">+ New strategy…</option>
+          </select>
+        </label>
         <div class="chips">
           <button class="chip c5" data-chip="5">5</button>
           <button class="chip c25" data-chip="25">25</button>
@@ -137,6 +151,8 @@
   <div class="loading" id="loading">Loading…</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="supabase-client.js"></script>
+  <script src="strategy.js"></script>
   <script src="app.js"></script>
   <script src="auth.js"></script>
 </body>

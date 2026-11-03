@@ -144,6 +144,28 @@ footer {
 }
 footer a { color: var(--gold); }
 
+.strategy-picker { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; color: var(--muted); }
+.strategy-picker select {
+  padding: 6px 10px;
+  font: inherit;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+}
+.strategy-picker select option { color: #111; }
+
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.stats-link {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.stats-link:hover { background: rgba(0, 0, 0, 0.3); }
+
 /* ---------- Auth ---------- */
 .user {
   display: flex;

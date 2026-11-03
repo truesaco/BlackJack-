@@ -31,7 +31,11 @@
     newRound: $("new-round"),
     reset: $("reset"),
     chips: document.querySelectorAll("[data-chip]"),
+    strategy: $("strategy"),
   };
+
+  const STRATEGY_KEY = "blackjack-strategy";
+  const CUSTOM_STRATEGIES_KEY = "blackjack-custom-strategies";
 
   const state = {
     deckId: null,
@@ -42,6 +46,13 @@
     dealer: [],
     holeHidden: true,
     busy: false,
+    baseBet: 0, // the bet before any double down, reused for the next hand
+    // Tracking for the stats page
+    sessionId: (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()),
+    handInSession: 0,
+    runningCount: 0, // Hi-Lo count of every card seen since the last shuffle
+    uncounted: [], // cards dealt in the current hand, counted when it ends
+    hand: null, // record of the hand in progress
   };
 
   // ---------- Storage ----------
@@ -68,10 +79,15 @@
     return data;
   }
 
-  const newShoe = () => api(`new/shuffle/?deck_count=${DECK_COUNT}`);
-  const reshuffle = () => api(`${state.deckId}/shuffle/`);
+  function resetCount() {
+    state.runningCount = 0;
+    state.uncounted = [];
+  }
+  const newShoe = () => api(`new/shuffle/?deck_count=${DECK_COUNT}`).then((d) => { resetCount(); return d; });
+  const reshuffle = () => api(`${state.deckId}/shuffle/`).then((d) => { resetCount(); return d; });
   async function draw(count) {
     const data = await api(`${state.deckId}/draw/?count=${count}`);
+    state.uncounted.push(...data.cards);
     return data.cards;
   }
 
@@ -85,25 +101,7 @@
   }
 
   // ---------- Scoring ----------
-  function cardValue(card) {
-    if (card.value === "ACE") return 11;
-    if (["KING", "QUEEN", "JACK"].includes(card.value)) return 10;
-    return parseInt(card.value, 10);
-  }
-
-  function handTotal(cards) {
-    let total = 0;
-    let aces = 0;
-    for (const c of cards) {
-      total += cardValue(c);
-      if (c.value === "ACE") aces++;
-    }
-    while (total > 21 && aces > 0) {
-      total -= 10;
-      aces--;
-    }
-    return { total, soft: aces > 0 };
-  }
+  const { cardValue, handTotal, hiLo, basicStrategy, cardCode } = window.BJStrategy;
 
   const isBlackjack = (cards) => cards.length === 2 && handTotal(cards).total === 21;
 
@@ -194,10 +192,23 @@
     state.busy = true;
     renderChips();
     try {
+      const bankrollBefore = state.bankroll;
+      state.baseBet = state.bet;
       state.bankroll -= state.bet; // bet goes on the table
       renderStats();
       await ensureShoe();
       state.holeHidden = true;
+      const shoeRemaining = state.remaining;
+      const decksLeft = Math.max(shoeRemaining / 52, 0.5);
+      state.hand = {
+        startedAt: Date.now(),
+        bankrollBefore,
+        strategy: currentStrategy(),
+        runningCount: state.runningCount,
+        trueCount: Math.round((state.runningCount / decksLeft) * 10) / 10,
+        shoeRemaining,
+        decisions: [],
+      };
       const cards = await draw(4);
       state.player = [cards[0], cards[2]];
       state.dealer = [cards[1], cards[3]];
@@ -224,8 +235,29 @@
     }
   }
 
+  // Save what the player chose next to what basic strategy recommends.
+  function recordDecision(action) {
+    if (!state.hand) return;
+    const { total, soft } = handTotal(state.player);
+    const up = cardValue(state.dealer[0]);
+    const canDouble = state.player.length === 2 && state.bankroll >= state.bet;
+    const recommended = basicStrategy(total, soft, up, canDouble);
+    state.hand.decisions.push({
+      step: state.hand.decisions.length + 1,
+      cards: state.player.map(cardCode),
+      total,
+      soft,
+      dealer_up: up,
+      can_double: canDouble,
+      action,
+      basic_strategy: recommended,
+      matches_basic: action === recommended,
+    });
+  }
+
   async function hit() {
     if (state.busy) return;
+    recordDecision("H");
     state.busy = true;
     setActionsEnabled(false);
     try {
@@ -255,6 +287,7 @@
 
   async function doubleDown() {
     if (state.busy || state.player.length !== 2 || state.bankroll < state.bet) return;
+    recordDecision("D");
     state.busy = true;
     setActionsEnabled(false);
     try {
@@ -282,8 +315,9 @@
     }
   }
 
-  async function stand() {
+  async function stand(byPlayer = false) {
     if (state.busy) return;
+    if (byPlayer) recordDecision("S");
     state.busy = true;
     setActionsEnabled(false);
     try {
@@ -333,6 +367,8 @@
     const suffix = net > 0 ? ` (+${money(net)})` : net < 0 ? ` (−${money(-net)})` : "";
     setMessage(text + suffix, kind);
 
+    recordHand(outcome, payout);
+
     renderStats();
     showPhase("done");
     if (state.bankroll < MIN_BET) {
@@ -342,12 +378,113 @@
     }
   }
 
+  function recordHand(outcome, payout) {
+    const h = state.hand;
+    state.hand = null;
+    // Count every card seen this hand (the hole card is face up by now).
+    state.runningCount += state.uncounted.reduce((sum, c) => sum + hiLo(c), 0);
+    state.uncounted = [];
+    if (!h) return;
+
+    const p = handTotal(state.player);
+    const d = handTotal(state.dealer);
+    const start = handTotal(state.player.slice(0, 2));
+    const playerBJ = isBlackjack(state.player);
+    const dealerBJ = isBlackjack(state.dealer);
+    const reason =
+      playerBJ && dealerBJ ? "both_blackjack"
+      : playerBJ ? "player_blackjack"
+      : dealerBJ ? "dealer_blackjack"
+      : p.total > 21 ? "player_bust"
+      : d.total > 21 ? "dealer_bust"
+      : p.total > d.total ? "higher_total"
+      : p.total < d.total ? "lower_total"
+      : "equal_total";
+    const matches = h.decisions.filter((x) => x.matches_basic).length;
+    const [c1, c2] = state.player;
+
+    state.handInSession += 1;
+    const row = {
+      session_id: state.sessionId,
+      hand_in_session: state.handInSession,
+      strategy: h.strategy,
+      bet: state.baseBet,
+      total_wagered: state.bet,
+      payout,
+      net: payout - state.bet,
+      bankroll_before: h.bankrollBefore,
+      bankroll_after: state.bankroll,
+      outcome,
+      reason,
+      player_cards: state.player.map(cardCode),
+      dealer_cards: state.dealer.map(cardCode),
+      player_total: p.total,
+      dealer_total: d.total,
+      start_total: start.total,
+      start_soft: start.soft,
+      start_pair: cardValue(c1) === cardValue(c2),
+      dealer_upcard: cardCode(state.dealer[0]),
+      dealer_up_value: cardValue(state.dealer[0]),
+      actions: h.decisions.map((x) => x.action).join(""),
+      decisions: h.decisions,
+      doubled: h.decisions.some((x) => x.action === "D"),
+      player_bust: p.total > 21,
+      dealer_bust: d.total > 21,
+      player_blackjack: playerBJ,
+      dealer_blackjack: dealerBJ,
+      bs_decisions: h.decisions.length,
+      bs_matches: matches,
+      running_count: h.runningCount,
+      true_count: h.trueCount,
+      shoe_remaining: h.shoeRemaining,
+      decks: DECK_COUNT,
+      duration_ms: Date.now() - h.startedAt,
+    };
+    if (window.blackjackRecordHand) window.blackjackRecordHand(row);
+  }
+
+  // ---------- Strategy tag ----------
+  function loadCustomStrategies() {
+    try { return JSON.parse(localStorage.getItem(CUSTOM_STRATEGIES_KEY)) || []; } catch { return []; }
+  }
+
+  function setupStrategyPicker() {
+    const select = el.strategy;
+    const customs = loadCustomStrategies();
+    const addOption = (name) => {
+      const opt = document.createElement("option");
+      opt.value = opt.textContent = name;
+      select.insertBefore(opt, select.querySelector('option[value="__new"]'));
+    };
+    customs.forEach(addOption);
+    let saved = null;
+    try { saved = localStorage.getItem(STRATEGY_KEY); } catch { /* ignore */ }
+    if (saved && [...select.options].some((o) => o.value === saved)) select.value = saved;
+    let previous = select.value;
+
+    select.addEventListener("change", () => {
+      if (select.value === "__new") {
+        const name = (prompt("Name your strategy (e.g. \"Hi-Lo bet spread\"):") || "").trim().slice(0, 60);
+        if (!name) { select.value = previous; return; }
+        if (![...select.options].some((o) => o.value === name)) {
+          addOption(name);
+          try { localStorage.setItem(CUSTOM_STRATEGIES_KEY, JSON.stringify([...customs, name])); customs.push(name); } catch { /* ignore */ }
+        }
+        select.value = name;
+      }
+      previous = select.value;
+      try { localStorage.setItem(STRATEGY_KEY, select.value); } catch { /* ignore */ }
+    });
+  }
+
+  const currentStrategy = () => (el.strategy && el.strategy.value !== "__new" ? el.strategy.value : "Unspecified");
+
   function newRound() {
     if (state.bankroll < MIN_BET) {
       state.bankroll = START_BANKROLL;
       saveBankroll();
     }
-    const lastBet = state.bet;
+    const lastBet = state.baseBet || state.bet;
     state.player = [];
     state.dealer = [];
     state.holeHidden = true;
@@ -365,6 +502,7 @@
     if (!el.actions.classList.contains("hidden") && !confirm("Abandon the current hand and reset?")) return;
     state.bankroll = START_BANKROLL;
     state.bet = 0;
+    state.baseBet = 0;
     saveBankroll();
     newRound();
   }
@@ -376,6 +514,8 @@
     state.bet = 0;
     state.player = [];
     state.dealer = [];
+    state.hand = null;
+    state.uncounted = [];
     state.deckId = null; // fetch a fresh shoe next time
     saveBankroll();
     renderHands();
@@ -393,11 +533,12 @@
   el.clearBet.addEventListener("click", clearBet);
   el.deal.addEventListener("click", deal);
   el.hit.addEventListener("click", hit);
-  el.stand.addEventListener("click", stand);
+  el.stand.addEventListener("click", () => stand(true));
   el.double.addEventListener("click", doubleDown);
   el.newRound.addEventListener("click", newRound);
   el.reset.addEventListener("click", resetBankroll);
 
+  setupStrategyPicker();
   renderStats();
   renderChips();
   showPhase("betting");
@@ -407,6 +548,7 @@
     storageKey = userId ? `blackjack-bankroll:${userId}` : "blackjack-bankroll";
     state.bankroll = loadBankroll();
     state.bet = 0;
+    state.baseBet = 0;
     state.player = [];
     state.dealer = [];
     state.holeHidden = true;
